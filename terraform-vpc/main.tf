@@ -102,7 +102,7 @@ resource "aws_security_group" "web_sg_prod" {
       cidr_blocks = ["0.0.0.0/0"]
     } 
 
-        # SSH (Port 22) Zugriff
+    # SSH (Port 22) Zugriff
     ingress {
       from_port = 22
       to_port = 22
