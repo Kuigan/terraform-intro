@@ -3,36 +3,46 @@ provider "aws" {
 }
 
 # VPC
-resource "aws_vpc" "main_vpc_prod" {  # "name" (hier dürch "main_vpc_prod" ersetz) ist der Interner Terraform Name welcher nicht auf AWS angezeigt wird.
-    cidr_block = "10.0.0.0/16" # Die wichtigste Eingabe um ein VPC erstellen zu können (alleine diese reicht aus).
+resource "aws_vpc" "main_vpc_prod" {
+    cidr_block = "10.0.0.0/16"
     tags = {
-        Name = "main-prod-vpc" # Name vom VPC, welcher auf AWS angzeigt wird.
+        Name = "main-prod-vpc"
   }
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main_igw_prod" {
-    vpc_id = aws_vpc.main_vpc_prod.id # Verweis auf die zugehörige VPC (ohne ID, einfach mit dem Namen)
+    vpc_id = aws_vpc.main_vpc_prod.id
     tags = {
-        Name = "main-prod-igw" # Name vom IGW, welcher auf AWS angzeigt wird.
+        Name = "main-prod-igw"
   }
 }
 
-
-# Public subnet
+# Public subnet A (eu-central-1a)
 resource "aws_subnet" "main_public_subnet_a_prod" {
     vpc_id = aws_vpc.main_vpc_prod.id
     cidr_block = "10.0.0.0/20"
     availability_zone = "eu-central-1a"
-    map_public_ip_on_launch = true # Werden automatisch öffentliche IP bekommen.
+    map_public_ip_on_launch = true
 
     tags = {
         Name = "main-prod-public-subnet-a"
   }
 }
 
+# Public subnet B (eu-central-1b)
+resource "aws_subnet" "main_public_subnet_b_prod" {
+    vpc_id = aws_vpc.main_vpc_prod.id
+    cidr_block = "10.0.16.0/20"
+    availability_zone = "eu-central-1b"
+    map_public_ip_on_launch = true
 
-# Private subnet
+    tags = {
+        Name = "main-prod-public-subnet-b"
+  }
+}
+
+# Private subnet A (eu-central-1a)
 resource "aws_subnet" "main_private_subnet_a_prod" {
     vpc_id = aws_vpc.main_vpc_prod.id
     cidr_block = "10.0.128.0/20"
@@ -40,6 +50,17 @@ resource "aws_subnet" "main_private_subnet_a_prod" {
 
     tags = {
         Name = "main-prod-private-subnet-a"
+  }
+}
+
+# Private subnet B (eu-central-1b)
+resource "aws_subnet" "main_private_subnet_b_prod" {
+    vpc_id = aws_vpc.main_vpc_prod.id
+    cidr_block = "10.0.144.0/20"
+    availability_zone = "eu-central-1b"
+
+    tags = {
+        Name = "main-prod-private-subnet-b"
   }
 }
 
@@ -57,9 +78,15 @@ resource "aws_route_table" "public_rtb_prod" {
     }
 }
 
-# Public Subnet to Public Route Table Association
-resource "aws_route_table_association" "public_rtb_subnet_assoc_prod" {
+# Public Subnet A to Public Route Table Association
+resource "aws_route_table_association" "public_rtb_subnet_a_assoc_prod" {
     subnet_id = aws_subnet.main_public_subnet_a_prod.id
+    route_table_id = aws_route_table.public_rtb_prod.id
+}
+
+# Public Subnet B to Public Route Table Association
+resource "aws_route_table_association" "public_rtb_subnet_b_assoc_prod" {
+    subnet_id = aws_subnet.main_public_subnet_b_prod.id
     route_table_id = aws_route_table.public_rtb_prod.id
 }
 
@@ -67,18 +94,18 @@ resource "aws_route_table_association" "public_rtb_subnet_assoc_prod" {
 resource "aws_security_group" "web_sg_prod" {
     vpc_id = aws_vpc.main_vpc_prod.id
 
-    ingress { # Eingehender Datenverkehr
+    ingress {
       from_port = 80
       to_port = 80
       protocol = "tcp"
-      cidr_blocks = [ "0.0.0.0/0" ]
+      cidr_blocks = ["0.0.0.0/0"]
     }  
 
-    egress { # Ausgehender Datenverkehr
-      from_port = 0 # Alle zulassen
-      to_port = 0 # Alle zulassen
-      protocol = "-1" # Alle zulassen
-      cidr_blocks = [ "0.0.0.0/0" ]           
+    egress {
+      from_port = 0
+      to_port = 0
+      protocol = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
     }
 
     tags = {
@@ -86,15 +113,14 @@ resource "aws_security_group" "web_sg_prod" {
     }
 }
 
-
-# EC2 Instance - Web Server
-resource "aws_instance" "web_server_prod" {
-  ami = "ami-0de02246788e4a354"  
+# EC2 Instance - Web Server in Public Subnet A
+resource "aws_instance" "web_server_a_prod" {
+  ami = "ami-0de02246788e4a354"
   instance_type = "t2.micro"
-  subnet_id = aws_subnet.main_public_subnet_a_prod.id  # Direkte ID vom Subnetz ohne VPC ID
-  vpc_security_group_ids = [ aws_security_group.web_sg_prod.id ]
+  subnet_id = aws_subnet.main_public_subnet_a_prod.id
+  vpc_security_group_ids = [aws_security_group.web_sg_prod.id]
 
-user_data = <<-EOF
+  user_data = <<-EOF
                 #!/bin/bash
                 dnf update -y
                 dnf install -y httpd
@@ -103,15 +129,82 @@ user_data = <<-EOF
                 echo "Hello World from $(hostname -f)!" > /var/www/html/index.html
                 EOF
 
-tags = {
-    Name = "web-server-prod"
-}
+  tags = {
+    Name = "web-server-a-prod"
   }
+}
 
+# EC2 Instance - Web Server in Public Subnet B
+resource "aws_instance" "web_server_b_prod" {
+  ami = "ami-0de02246788e4a354"
+  instance_type = "t2.micro"
+  subnet_id = aws_subnet.main_public_subnet_b_prod.id
+  vpc_security_group_ids = [aws_security_group.web_sg_prod.id]
+
+  user_data = <<-EOF
+                #!/bin/bash
+                dnf update -y
+                dnf install -y httpd
+                systemctl start httpd
+                systemctl enable httpd
+                echo "Hello World from $(hostname -f)!" > /var/www/html/index.html
+                EOF
+
+  tags = {
+    Name = "web-server-b-prod"
+  }
+}
+
+# EC2 Instance - Web Server in Private Subnet A
+resource "aws_instance" "web_server_private_a_prod" {
+  ami = "ami-0de02246788e4a354"
+  instance_type = "t2.micro"
+  subnet_id = aws_subnet.main_private_subnet_a_prod.id
+  vpc_security_group_ids = [aws_security_group.web_sg_prod.id]
+
+  user_data = <<-EOF
+                #!/bin/bash
+                dnf update -y
+                dnf install -y httpd
+                systemctl start httpd
+                systemctl enable httpd
+                echo "Hello World from $(hostname -f)!" > /var/www/html/index.html
+                EOF
+
+  tags = {
+    Name = "web-server-private-a-prod"
+  }
+}
+
+# EC2 Instance - Web Server in Private Subnet B
+resource "aws_instance" "web_server_private_b_prod" {
+  ami = "ami-0de02246788e4a354"
+  instance_type = "t2.micro"
+  subnet_id = aws_subnet.main_private_subnet_b_prod.id
+  vpc_security_group_ids = [aws_security_group.web_sg_prod.id]
+
+  user_data = <<-EOF
+                #!/bin/bash
+                dnf update -y
+                dnf install -y httpd
+                systemctl start httpd
+                systemctl enable httpd
+                echo "Hello World from $(hostname -f)!" > /var/www/html/index.html
+                EOF
+
+  tags = {
+    Name = "web-server-private-b-prod"
+  }
+}
 
 # Outputs
 
-output "instance_public_ip" {
-    description = "The Public IP of the EC2 Inctance"
-    value = aws_instance.web_server_prod.public_ip
+output "instance_public_ip_a" {
+    description = "The Public IP of the EC2 Instance in Public Subnet A"
+    value = aws_instance.web_server_a_prod.public_ip
+}
+
+output "instance_public_ip_b" {
+    description = "The Public IP of the EC2 Instance in Public Subnet B"
+    value = aws_instance.web_server_b_prod.public_ip
 }
