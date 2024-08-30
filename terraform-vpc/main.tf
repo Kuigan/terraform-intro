@@ -94,12 +94,29 @@ resource "aws_route_table_association" "public_rtb_subnet_b_assoc_prod" {
 resource "aws_security_group" "web_sg_prod" {
     vpc_id = aws_vpc.main_vpc_prod.id
 
+    # HTTP (Port 80) Zugriff
     ingress {
       from_port = 80
       to_port = 80
       protocol = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
-    }  
+    } 
+
+        # SSH (Port 22) Zugriff
+    ingress {
+      from_port = 22
+      to_port = 22
+      protocol = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    # Benutzerdefinierter Port TCP 3000
+    ingress {
+      from_port = 3000
+      to_port = 3000
+      protocol = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
 
     egress {
       from_port = 0
@@ -122,11 +139,20 @@ resource "aws_instance" "web_server_a_prod" {
 
   user_data = <<-EOF
                 #!/bin/bash
-                dnf update -y
-                dnf install -y httpd
-                systemctl start httpd
-                systemctl enable httpd
-                echo "Hello World from $(hostname -f)!" > /var/www/html/index.html
+
+                sudo dnf update -y
+                sudo dnf install git -y
+
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                nvm install --lts
+
+                git clone https://github.com/gal-projects/notes-app-express.git /home/ec2-user/notes-app-express
+                cd /home/ec2-user/notes-app-express 
+                npm install
+                npm run build
+                npm start
                 EOF
 
   tags = {
@@ -143,11 +169,20 @@ resource "aws_instance" "web_server_b_prod" {
 
   user_data = <<-EOF
                 #!/bin/bash
-                dnf update -y
-                dnf install -y httpd
-                systemctl start httpd
-                systemctl enable httpd
-                echo "Hello World from $(hostname -f)!" > /var/www/html/index.html
+
+                sudo dnf update -y
+                sudo dnf install git -y
+
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                nvm install --lts
+
+                git clone https://github.com/gal-projects/notes-app-express.git /home/ec2-user/notes-app-express
+                cd /home/ec2-user/notes-app-express 
+                npm install
+                npm run build
+                npm start
                 EOF
 
   tags = {
